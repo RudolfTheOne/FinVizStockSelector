@@ -3,7 +3,7 @@
 This short script identifies and filters stocks based on their financial scores and various metrics.
 
 It fetches financial scores (Piotroski F-Score, Altman Z-Score, and Beneish M-Score) for a list of stocks from the Gurufocus website.
-<img height="100" src="resource/scrape-gurufocus.png"/>
+<img height="100" src="resources/scrape-gurufocus.png"/>
 
 It retrieves overview, financial, and valuation data for stocks using the FinvizFinance library.
 
