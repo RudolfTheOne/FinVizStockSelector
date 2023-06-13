@@ -6,6 +6,7 @@ from finvizfinance.screener.valuation import Valuation
 import pandas as pd
 from tqdm import tqdm
 import numpy as np
+import time
 
 def get_financial_scores(ticker):
     try:
@@ -65,12 +66,22 @@ guru_ls = ['Piotroski F-Score', 'Altman Z-Score', 'Beneish M-Score']
 dataframe = dataframe.assign(**{key: [None]*len(dataframe) for key in guru_ls})
 
 session = requests.Session()
+max_attempts = 3
 
 for ticker in tqdm(dataframe['Ticker\n\n'], desc='Retrieving scores', unit='ticker'):
-    scores = get_financial_scores(ticker)
-    for key, value in scores.items():
-        dataframe.loc[dataframe['Ticker\n\n'] == ticker, key] = value
-
+    for attempt in range(max_attempts):
+        try:
+            scores = get_financial_scores(ticker)
+            if scores is None:
+                break  # If scores is None, we simply go to next ticker
+            for key, value in scores.items():
+                dataframe.loc[dataframe['Ticker\n\n'] == ticker, key] = value
+            break  # If successful, break the retry loop and move to next ticker
+        except Exception as e:
+            print(f"Attempt {attempt+1} of {max_attempts} failed for {ticker}. Exception: {e}")
+            time.sleep(2)  # Wait for 2 seconds before next attempt
+    else:  # This else clause will run if the for loop is exhausted, i.e., all attempts failed.
+        print(f"All attempts to fetch data for {ticker} have failed.")
 
 # Filter based on guru scores
 dataframe = dataframe[dataframe['Piotroski F-Score'] >= 6]
