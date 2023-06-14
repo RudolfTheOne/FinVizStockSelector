@@ -7,31 +7,46 @@ import pandas as pd
 from tqdm import tqdm
 import numpy as np
 import time
+import re
 
 def get_financial_scores(ticker):
     try:
-        url = f"https://www.gurufocus.com/stock/{ticker}/summary"
-        response = requests.get(url)
+        hdr = {'User-Agent': 'Mozilla/5.0'}
+        guru_symbol = ticker.replace('-', '.')
 
-        if response.status_code != 200:
-            print(f"Failed to fetch the web page: {url}")
+        guru_req = requests.get("https://www.gurufocus.com/stock/" + guru_symbol, headers=hdr)
+        if guru_req.status_code != 200 and guru_req.status_code != 403:
             return None
 
-        soup = BeautifulSoup(response.text, 'html.parser')
+        guru_soup = BeautifulSoup(guru_req.content, 'html.parser')
 
-        piotroski_f_score_tag = soup.find(string='Piotroski F-Score')
-        piotroski_f_score = piotroski_f_score_tag.find_next().text if piotroski_f_score_tag else np.nan
+        score_names = ['Piotroski F-Score', 'Altman Z-Score', 'Beneish M-Score']
+        score_values = []
 
-        altman_z_score_tag = soup.find(string='Altman Z-Score')
-        altman_z_score = altman_z_score_tag.find_next().text if altman_z_score_tag else np.nan
-
-        beneish_m_score_tag = soup.find(string='Beneish M-Score')
-        beneish_m_score = beneish_m_score_tag.find_next().text if beneish_m_score_tag else np.nan
+        for val in score_names:
+            try:
+                found = guru_soup.find('a', string=re.compile(val))
+                if found is None:
+                    print(f"Couldn't find {val} for {ticker}")
+                    score_value = np.nan
+                else:
+                    score_value = found.find_next('td').text
+                    if val == 'Piotroski F-Score':
+                        score_value = score_value.split('/')[
+                            0].strip()  # strip is used to remove any leading or trailing white spaces
+                    score_value = float(score_value)
+            except Exception as e:
+                try:
+                    print(f'Failed to convert {score_value} to float for {val}. Error: {e}')
+                except UnboundLocalError:
+                    print(f"Failed before 'score_value' was assigned. Error: {e}")
+                score_value = np.nan
+            score_values.append(score_value)
 
         return {
-            'Piotroski F-Score': float(piotroski_f_score) if piotroski_f_score else np.nan,
-            'Altman Z-Score': float(altman_z_score) if altman_z_score else np.nan,
-            'Beneish M-Score': float(beneish_m_score) if beneish_m_score else np.nan
+            'Piotroski F-Score': score_values[0],
+            'Altman Z-Score': score_values[1],
+            'Beneish M-Score': score_values[2]
         }
 
     except requests.exceptions.RequestException as e:
@@ -68,18 +83,21 @@ dataframe = dataframe.assign(**{key: [None]*len(dataframe) for key in guru_ls})
 session = requests.Session()
 max_attempts = 3
 
-for ticker in tqdm(dataframe['Ticker\n\n'], desc='Retrieving scores', unit='ticker'):
+# tickers = dataframe['Ticker\n\n'][:4]  # Get the first 5 tickers from the dataframe
+tickers = dataframe['Ticker\n\n']
+
+for ticker in tqdm(tickers, desc='Retrieving scores', unit='ticker'):
     for attempt in range(max_attempts):
         try:
             scores = get_financial_scores(ticker)
             if scores is None:
-                break  # If scores is None, we simply go to next ticker
+                break  # If scores is None, we simply go to the next ticker
             for key, value in scores.items():
                 dataframe.loc[dataframe['Ticker\n\n'] == ticker, key] = value
-            break  # If successful, break the retry loop and move to next ticker
+            break  # If successful, break the retry loop and move to the next ticker
         except Exception as e:
             print(f"Attempt {attempt+1} of {max_attempts} failed for {ticker}. Exception: {e}")
-            time.sleep(2)  # Wait for 2 seconds before next attempt
+            time.sleep(2)  # Wait for 2 seconds before the next attempt
     else:  # This else clause will run if the for loop is exhausted, i.e., all attempts failed.
         print(f"All attempts to fetch data for {ticker} have failed.")
 
