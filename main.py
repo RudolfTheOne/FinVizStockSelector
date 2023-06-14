@@ -27,7 +27,7 @@ def get_financial_scores(ticker):
             try:
                 found = guru_soup.find('a', string=re.compile(val))
                 if found is None:
-                    print(f"Couldn't find {val} for {ticker}")
+                    # print(f"Couldn't find {val} for {ticker}")
                     score_value = np.nan
                 else:
                     score_value = found.find_next('td').text
@@ -36,10 +36,10 @@ def get_financial_scores(ticker):
                             0].strip()  # strip is used to remove any leading or trailing white spaces
                     score_value = float(score_value)
             except Exception as e:
-                try:
-                    print(f'Failed to convert {score_value} to float for {val}. Error: {e}')
-                except UnboundLocalError:
-                    print(f"Failed before 'score_value' was assigned. Error: {e}")
+                # try:
+                #     print(f'Failed to convert {score_value} to float for {val}. Error: {e}')
+                # except UnboundLocalError:
+                #     print(f"Failed before 'score_value' was assigned. Error: {e}")
                 score_value = np.nan
             score_values.append(score_value)
 
@@ -62,8 +62,11 @@ foverview = Overview()
 ffinancial = Financial()
 fvaluation = Valuation()
 
+# filters_dict = {'Price/Free Cash Flow':'Under 40','InstitutionalOwnership':'Under 80%',
+#                 'EPS growththis year': 'Over 10%', 'Market Cap.': '+Mid (over $2bln)'}
+
 filters_dict = {'Price/Free Cash Flow':'Under 40','InstitutionalOwnership':'Under 80%',
-                'EPS growththis year': 'Over 10%', 'Market Cap.': '+Mid (over $2bln)'}
+                'EPS growththis year': 'Positive (>0%)', 'Market Cap.': '+Mid (over $2bln)'}
 foverview.set_filter(filters_dict=filters_dict)
 dataframe = foverview.screener_view()
 print("\nOverview:")
@@ -101,20 +104,16 @@ for ticker in tqdm(tickers, desc='Retrieving scores', unit='ticker'):
     else:  # This else clause will run if the for loop is exhausted, i.e., all attempts failed.
         print(f"All attempts to fetch data for {ticker} have failed.")
 
+# dataframe.to_csv("unfiltered.csv", index=False) # Print the dataframe to csv for review
+
 # Filter based on guru scores
 dataframe = dataframe[dataframe['Piotroski F-Score'] >= 6]
 dataframe = dataframe[dataframe['Altman Z-Score'] >= 1.81]
 dataframe = dataframe[dataframe['Beneish M-Score'] <= -1.78]
 
-print("\nAfter filtering out bad f-score, z-score and m-score:")
-print(dataframe.head())
-
 # Filter out specific industry and country
 dataframe = dataframe[~dataframe['Industry'].str.contains("bank", na=False)]
 dataframe = dataframe[~dataframe['Country'].str.contains("China", na=False)]
-
-print("\nAfter filtering out Industry and Country")
-print(dataframe.head())
 
 merged_df = pd.merge(dataframe, financial_df, on='Ticker\n\n')
 merged_df = pd.merge(merged_df, valuation_df, on='Ticker\n\n')
@@ -131,9 +130,6 @@ merged_df['PFCF_rank'] = merged_df['P/FCF'].rank(ascending=True)
 # Summarize ranks and sort
 merged_df['Total_rank'] = merged_df['PM_rank'] + merged_df['EPS_rank'] + merged_df['PFCF_rank']
 merged_df = merged_df.sort_values('Total_rank')
-
-print("\nAfter merging")
-print(merged_df.head())
 
 # Limit to top 20 stocks
 # merged_df = merged_df.head(20)
