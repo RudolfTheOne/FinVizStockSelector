@@ -85,9 +85,10 @@ dataframe = dataframe.assign(**{key: [None]*len(dataframe) for key in guru_ls})
 
 session = requests.Session()
 max_attempts = 3
+print(dataframe.columns)
 
 # tickers = dataframe['Ticker\n\n'][:4]  # Get the first 5 tickers from the dataframe
-tickers = dataframe['Ticker\n\n']
+tickers = dataframe['Ticker']
 
 for ticker in tqdm(tickers, desc='Retrieving scores', unit='ticker'):
     for attempt in range(max_attempts):
@@ -96,7 +97,7 @@ for ticker in tqdm(tickers, desc='Retrieving scores', unit='ticker'):
             if scores is None:
                 break  # If scores is None, we simply go to the next ticker
             for key, value in scores.items():
-                dataframe.loc[dataframe['Ticker\n\n'] == ticker, key] = value
+                dataframe.loc[dataframe['Ticker'] == ticker, key] = value
             break  # If successful, break the retry loop and move to the next ticker
         except Exception as e:
             print(f"Attempt {attempt+1} of {max_attempts} failed for {ticker}. Exception: {e}")
@@ -115,8 +116,8 @@ dataframe = dataframe[dataframe['Beneish M-Score'] <= -1.78]
 dataframe = dataframe[~dataframe['Industry'].str.contains("bank", na=False)]
 dataframe = dataframe[~dataframe['Country'].str.contains("China", na=False)]
 
-merged_df = pd.merge(dataframe, financial_df, on='Ticker\n\n')
-merged_df = pd.merge(merged_df, valuation_df, on='Ticker\n\n')
+merged_df = pd.merge(dataframe, financial_df, on='Ticker')
+merged_df = pd.merge(merged_df, valuation_df, on='Ticker')
 
 # Convert the financial data to numeric values for ranking
 for col in ['Profit M', 'EPS this Y', 'P/FCF']:
@@ -136,5 +137,5 @@ merged_df = merged_df.sort_values('Total_rank')
 
 # Write to text file
 with open('sorted_filtered_tickers.txt', 'w') as f:
-    for ticker in tqdm(merged_df['Ticker\n\n'], desc='Writing to file', unit='ticker'):
+    for ticker in tqdm(merged_df['Ticker'], desc='Writing to file', unit='ticker'):
         f.write(f"{ticker}\n")
